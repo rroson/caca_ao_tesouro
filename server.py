@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, send_from_directory, render_template
 import folium
 import random
+import math
 
 app = Flask(__name__)
 
@@ -13,8 +14,9 @@ cores_equipes = ['darkred', 'white', 'gray', 'pink', 'darkgreen', 'black',
           'beige', 'purple', 'orange', 'lightgray', 'green', 'darkblue',
           'blue', 'darkpurple', 'lightblue', 'lightgreen', 'cadetblue', 'lightred']
 tesouro = [-23.5650, -46.6425]
+posicoes_iniciais = equipes.copy() # Armazena as posições iniciais
 
-# Função paraSortear Cor das Equipes
+# Sortear cor
 def sortear_e_remover(cores):
     if not cores:
         return "Todas as cores já foram sorteadas!"  # Caso a lista esteja vazia
@@ -39,6 +41,18 @@ def gerar_mapa():
     # Salvar o mapa
     mapa.save("static/caca_ao_tesouro_server.html")
 
+# Calcula a distância entre dois pontos
+def distancia(ponto1, ponto2):
+    lat1, lon1 = ponto1
+    lat2, lon2 = ponto2
+    radius = 6371  # Radius of the earth in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) * math.sin(dlat / 2) + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) * math.sin(dlon / 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    distance = radius * c
+    return distance
+
 # Mostrar mapa atualizado em /
 @app.route('/', methods=['GET', 'POST'])
 def mostrar_mapa():
@@ -62,7 +76,19 @@ def atualizar_posicao():
     if equipe in equipes:
         equipes[equipe] = nova_posicao
         gerar_mapa()  # Gerar um novo mapa com as posições atualizadas
-        return jsonify({"status": "Posição atualizada!"})
+        
+        # Calcular e retornar a distância
+        distancia_atual = distancia(nova_posicao, tesouro)
+        distancia_inicial = distancia(posicoes_iniciais[equipe], tesouro)
+        
+        if distancia_atual < distancia_inicial:
+            mensagem_distancia = "A distância até o tesouro diminuiu!"
+        elif distancia_atual > distancia_inicial:
+            mensagem_distancia = "A distância até o tesouro aumentou!"
+        else:
+            mensagem_distancia = "A distância até o tesouro permanece a mesma."
+        
+        return jsonify({"status": "Posição atualizada!", "mensagem_distancia": mensagem_distancia})
     return jsonify({"status": "Equipe não encontrada!"}), 404
 
 # Rota para baixar o mapa atualizado
